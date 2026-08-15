@@ -69,8 +69,4 @@ dev = [
 ]
 
 [tool.ruff.lint]
-# E4/E7/E9 + F is ruff's own actual default rule set; adding I (import
-# sorting) and UP (pyupgrade). Deliberately excludes E501 (line length) -
-# several eval-dataset strings are long natural-language questions that
-# read better as one line.
 select = ["E4", "E7", "E9", "F", "I", "UP"]
