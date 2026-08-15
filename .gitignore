@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+logs
+
+# Source data & generated artifacts - regenerate via the ingestion pipeline
+# (see README). Not committed: multi-MB binaries, and redistribution rights
+# for the source SOP PDF haven't been confirmed.
+server/data/*.pdf
+server/ingested_docs/
+
+# Generated eval reports - reproducible via `python -m evaluation.report`
+eval_report.html
+eval_report.json
+
+# OS
+.DS_Store

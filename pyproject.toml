@@ -1,0 +1,76 @@
+[project]
+name = "wms-sop-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp==3.4.2",
+    "click>=8.0",
+    "unkey-py>=3.0.3",
+    "llama-index>=0.14.23",
+    "llama-index-embeddings-openai",
+    "llama-index-llms-openai",
+    "docling[vlm]>=2.111.0",
+    "pydantic-settings",
+    "ipykernel>=7.3.0",
+    "pypdf>=6.14.2",
+    "llama-index-readers-file>=0.6.0",
+    "langchain-huggingface>=1.2.2",
+    "sentence-transformers>=5.6.1",
+    "iprogress>=0.4",
+    "ipywidgets>=8.1.8",
+    "dotenv>=0.9.9",
+    "langchain-google-genai>=4.3.1",
+    "llama-cloud>=2.1",
+    "llama-parse>=0.5.20",
+    "llama-index-readers-docling>=0.4.2",
+    "llama-index-node-parser-docling>=0.4.2",
+    "spacy>=3.8.14",
+    "pandas>=2.3.3",
+    "docling-core>=2.86.0",
+    "llama-index-vector-stores-postgres",
+    "scalekit-sdk-python>=2.15.0",
+    "llama-index-vector-stores-vertexaivectorsearch[v2]>=0.5.0",
+    "google-cloud-vectorsearch>=0.11.1",
+    "google-auth>=2.56.2",
+    "llama-index-llms-ollama>=0.10.1",
+    "ragas>=0.4.3",
+    "langchain-community==0.3.31",
+    "tqdm>=4.68.3",
+    "openai>=2.44.0",
+    "llama-index-core>=0.14.23",
+    "matplotlib>=3.11.1",
+]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[project.scripts]
+wms-sop-mcp = "cli:cli"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+sources = ["server"]
+include = ["server/**/*.py"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.16.3",
+]
+
+[tool.ruff.lint]
+# E4/E7/E9 + F is ruff's own actual default rule set; adding I (import
+# sorting) and UP (pyupgrade). Deliberately excludes E501 (line length) -
+# several eval-dataset strings are long natural-language questions that
+# read better as one line.
+select = ["E4", "E7", "E9", "F", "I", "UP"]
