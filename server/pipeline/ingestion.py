@@ -1,94 +1,52 @@
 from __future__ import annotations
 
-import datetime
 import json
 import logging
+import os
 import time
 from pathlib import Path
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field
+from typing import Any
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
-from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import (
-    VlmConvertOptions,
-    VlmPipelineOptions,
+    TableStructureOptions,
+    ThreadedPdfPipelineOptions,
 )
-from docling.datamodel.settings import settings
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.pipeline.vlm_pipeline import VlmPipeline
+
+logger = logging.getLogger(__name__)
 
 
-logger = logging.getLogger("docling_vlm_ingest")
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-)
-
-
-DeviceName = Literal["auto", "cpu", "mps", "cuda", "xpu"]
-
-
-class IngestedDocument(BaseModel):
-    source_file: str
-    file_name: str
-    parser: str = "docling"
-    pipeline: str = "vlm"
-    vlm_preset: str
-    device: str
-    num_threads: int
-    status: str
-    elapsed_seconds: float
-    ingested_at_utc: str = Field(
-        default_factory=lambda: datetime.datetime.now(
-            datetime.timezone.utc
-        ).isoformat()
-    )
-    markdown_path: str | None = None
-    json_path: str | None = None
-    markdown: str | None = None
-    document: dict[str, Any] | None = None
-    error: str | None = None
-
-
-class IngestDocument:
+class DocumentIngestor:
     """
-    Production-style Docling VLM ingestion pipeline.
-
-    Use this when you want:
-    - local or accelerated VLM parsing
-    - markdown output for RAG
-    - JSON metadata for audit/layout/table/image information
+    Ingest documents with Docling and export markdown/json.
+    Uses Docling's threaded PDF pipeline for page-stage parallelism.
     """
 
     def __init__(
         self,
-        output_dir: str | Path = "ingested_docs",
-        device: DeviceName = "auto",
+        device: str = "auto",
         num_threads: int = 8,
-        vlm_preset: str = "granite_docling",
-        enable_profiling: bool = True,
+        enable_ocr: bool = True,
+        enable_tables: bool = True,
+        enable_picture_description: bool = True,
+        include_raw_document: bool = True,
     ) -> None:
-        self.output_dir = Path(output_dir)
-        self.markdown_dir = self.output_dir / "markdown"
-        self.json_dir = self.output_dir / "json"
-
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
-        self.json_dir.mkdir(parents=True, exist_ok=True)
-
         self.device = device
         self.num_threads = num_threads
-        self.vlm_preset = vlm_preset
-        self.enable_profiling = enable_profiling
+        self.enable_ocr = enable_ocr
+        self.enable_tables = enable_tables
+        self.enable_picture_description = enable_picture_description
+        self.include_raw_document = include_raw_document
 
-        if enable_profiling:
-            settings.debug.profile_pipeline_timings = True
+        # Docling docs mention OMP_NUM_THREADS for CPU thread limiting.
+        # Keep it aligned with AcceleratorOptions.
+        os.environ.setdefault("OMP_NUM_THREADS", str(num_threads))
 
         self.converter = self._build_converter()
 
-    def _to_accelerator_device(self) -> AcceleratorDevice:
+    def _build_converter(self) -> DocumentConverter:
         device_map = {
             "auto": AcceleratorDevice.AUTO,
             "cpu": AcceleratorDevice.CPU,
@@ -96,161 +54,111 @@ class IngestDocument:
             "cuda": AcceleratorDevice.CUDA,
             "xpu": AcceleratorDevice.XPU,
         }
-        return device_map[self.device]
 
-    def _build_converter(self) -> DocumentConverter:
-        """
-        Build Docling VLM converter.
+        if self.device not in device_map:
+            raise ValueError(
+                f"Invalid device={self.device}. Use one of: {list(device_map.keys())}"
+            )
 
-        VlmConvertOptions.from_preset("granite_docling") uses Docling's
-        recommended GraniteDocling VLM preset. Docling docs show this as
-        the recommended explicit VLM setup.
-        """
         accelerator_options = AcceleratorOptions(
             num_threads=self.num_threads,
-            device=self._to_accelerator_device(),
+            device=device_map[self.device],
         )
 
-        vlm_options = VlmConvertOptions.from_preset(self.vlm_preset)
+        # Out-of-box threaded PDF pipeline.
+        pipeline_options = ThreadedPdfPipelineOptions()
+        pipeline_options.accelerator_options = accelerator_options
 
-        pipeline_options = VlmPipelineOptions(
-            vlm_options=vlm_options,
+        pipeline_options.do_ocr = self.enable_ocr
+        pipeline_options.do_table_structure = self.enable_tables
+        pipeline_options.do_picture_description = self.enable_picture_description
+
+        if self.enable_tables:
+            pipeline_options.table_structure_options = TableStructureOptions(
+                do_cell_matching=True
+            )
+
+        logger.info(
+            "Docling config: device=%s threads=%s ocr=%s tables=%s picture_description=%s raw=%s",
+            self.device,
+            self.num_threads,
+            self.enable_ocr,
+            self.enable_tables,
+            self.enable_picture_description,
+            self.include_raw_document,
         )
 
-        if hasattr(pipeline_options, "accelerator_options"):
-            pipeline_options.accelerator_options = accelerator_options
-
-        converter = DocumentConverter(
+        return DocumentConverter(
             format_options={
                 InputFormat.PDF: PdfFormatOption(
-                    pipeline_cls=VlmPipeline,
                     pipeline_options=pipeline_options,
                 )
             }
         )
 
-        return converter
-
     def ingest_one(
         self,
         file_path: str | Path,
-        include_raw_document_in_json: bool = True,
-    ) -> IngestedDocument:
+        output_json: str | Path,
+        output_md: str | Path,
+    ) -> dict[str, Any]:
         input_path = Path(file_path)
+        output_json_path = Path(output_json)
+        output_md_path = Path(output_md)
 
         if not input_path.exists():
             raise FileNotFoundError(f"Document not found: {input_path}")
 
-        if not input_path.is_file():
-            raise ValueError(f"Path is not a file: {input_path}")
+        output_json_path.parent.mkdir(parents=True, exist_ok=True)
+        output_md_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Starting Docling ingestion: %s", input_path)
 
         started = time.perf_counter()
-        logger.info("Starting ingestion: %s", input_path)
 
-        markdown_path = self.markdown_dir / f"{input_path.stem}.md"
-        json_path = self.json_dir / f"{input_path.stem}.json"
+        result = self.converter.convert(str(input_path))
 
-        try:
-            result = self.converter.convert(str(input_path))
-            elapsed = round(time.perf_counter() - started, 3)
+        elapsed_seconds = round(time.perf_counter() - started, 3)
 
-            status = getattr(result, "status", None)
+        logger.info(
+            "Docling conversion completed: file=%s elapsed_seconds=%s",
+            input_path.name,
+            elapsed_seconds,
+        )
 
-            if status and status != ConversionStatus.SUCCESS:
-                logger.warning("Conversion finished with status: %s", status)
+        markdown = result.document.export_to_markdown()
+        doc_dict = result.document.export_to_dict() if self.include_raw_document else None
 
-            markdown = result.document.export_to_markdown()
-            doc_dict = result.document.export_to_dict()
+        output_md_path.write_text(markdown, encoding="utf-8")
 
-            markdown_path.write_text(markdown, encoding="utf-8")
+        output = {
+            "source_file": str(input_path),
+            "file_name": input_path.name,
+            "parser": "docling",
+            "device": self.device,
+            "num_threads": self.num_threads,
+            "elapsed_seconds": elapsed_seconds,
+            "markdown_file": str(output_md_path),
+            "settings": {
+                "enable_ocr": self.enable_ocr,
+                "enable_tables": self.enable_tables,
+                "enable_picture_description": self.enable_picture_description,
+                "include_raw_document": self.include_raw_document,
+                "pipeline": "threaded_pdf",
+            },
+            "markdown": markdown,
+            "document": doc_dict,
+        }
 
-            output = IngestedDocument(
-                source_file=str(input_path),
-                file_name=input_path.name,
-                vlm_preset=self.vlm_preset,
-                device=self.device,
-                num_threads=self.num_threads,
-                status=str(status or "unknown"),
-                elapsed_seconds=elapsed,
-                markdown_path=str(markdown_path),
-                json_path=str(json_path),
-                markdown=markdown,
-                document=doc_dict if include_raw_document_in_json else None,
-            )
-
-            json_path.write_text(
-                output.model_dump_json(indent=2, exclude_none=True),
-                encoding="utf-8",
-            )
-
-            logger.info(
-                "Finished ingestion: %s in %.3fs",
-                input_path.name,
-                elapsed,
-            )
-
-            return output
-
-        except Exception as exc:
-            elapsed = round(time.perf_counter() - started, 3)
-            logger.exception("Failed ingestion: %s", input_path)
-
-            output = IngestedDocument(
-                source_file=str(input_path),
-                file_name=input_path.name,
-                vlm_preset=self.vlm_preset,
-                device=self.device,
-                num_threads=self.num_threads,
-                status="failed",
-                elapsed_seconds=elapsed,
-                json_path=str(json_path),
-                error=str(exc),
-            )
-
-            json_path.write_text(
-                output.model_dump_json(indent=2, exclude_none=True),
-                encoding="utf-8",
-            )
-
-            return output
-
-    def ingest_many(
-        self,
-        input_dir: str | Path,
-        patterns: tuple[str, ...] = ("*.pdf",),
-        include_raw_document_in_json: bool = True,
-    ) -> list[IngestedDocument]:
-        input_dir = Path(input_dir)
-
-        if not input_dir.exists():
-            raise FileNotFoundError(f"Input directory not found: {input_dir}")
-
-        files: list[Path] = []
-
-        for pattern in patterns:
-            files.extend(input_dir.glob(pattern))
-
-        files = sorted(set(files))
-
-        logger.info("Found %s files", len(files))
-
-        results: list[IngestedDocument] = []
-
-        for file_path in files:
-            result = self.ingest_one(
-                file_path=file_path,
-                include_raw_document_in_json=include_raw_document_in_json,
-            )
-            results.append(result)
-
-        manifest_path = self.output_dir / "manifest.json"
-        manifest_path.write_text(
-            json.dumps(
-                [result.model_dump(exclude_none=True) for result in results],
-                indent=2,
-                ensure_ascii=False,
-            ),
+        output_json_path.write_text(
+            json.dumps(output, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
 
-        return results
+        logger.info(
+            "Saved Docling outputs: json=%s markdown=%s",
+            output_json_path,
+            output_md_path,
+        )
+
+        return output

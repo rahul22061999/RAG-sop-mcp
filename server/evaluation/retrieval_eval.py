@@ -1,114 +1,157 @@
 # Measure Retrieval and generation seperately
 import asyncio
-from tqdm.asyncio import tqdm_asyncio
-from openai import AsyncOpenAI
-from llama_index.core.vector_stores.types import VectorStoreQueryMode
+
 from config import settings
+from llama_index.core.vector_stores.types import VectorStoreQueryMode
+from openai import AsyncOpenAI
 from ragas.llms import llm_factory
-from ragas.metrics.collections import ContextPrecision, ContextRecall, ContextEntityRecall, NoiseSensitivity
+from ragas.metrics.collections import (
+    ContextPrecision,
+    ContextRecall,
+)
+from tqdm.asyncio import tqdm_asyncio
 
 GROUND_TRUTH = [
-
     {
-        "question": "What happens to an item if it fails the R&I Committee's inspection?",
+        "question": "A carton of vaccines arrives and the temperature monitor inside reads too low. What does the SOP require before that carton can be accepted?",
         "reference": (
-            "The item is rejected and immediately moved to the quarantine area, "
-            "with each carton clearly marked 'Not For Use - Quarantined'. The "
-            "Warehouse Manager is notified to remove the rejected product from "
-            "the Goods Receipt in mSupply, and the Contract Management Chief is "
-            "notified to inform the supplier of the problem. Minor issues are "
-            "resolved and the item released; significant issues require the "
-            "supplier to replace, destroy, or refund the stock at their own cost."
+            "If a temperature monitor in any carton is too low (below 2°C), the "
+            "entire carton must be subjected to a Shake Test. If the secondary "
+            "test also fails, that carton must be rejected and a thorough "
+            "inspection of all remaining cartons must be carried out. For "
+            "vaccines, a Vaccines Arrival Report (VAR) must also be completed "
+            "and emailed to the supplier within 36 hours of receipt."
         ),
-        "reference_page": "24",
+        "reference_page": "20",
     },
     {
-        "question": "Who finalises a Supplier Invoice, and what does that step actually do?",
+        "question": "Who needs to be told straight away if the quarterly controlled-drugs count doesn't match the register?",
         "reference": (
-            "The Warehouse Director finalises the Supplier Invoice, after the "
-            "Warehouse Manager has already confirmed it. Finalising blocks any "
-            "further editing and completes the goods receipt process."
+            "Any discrepancy found during the periodic stocktake of controlled "
+            "substances against the DDA Register (done at least once every 3 "
+            "months by the Warehouse Manager and the rotational DDA "
+            "Coordinator) must be immediately reported to the NMS President "
+            "and the National Director of Pharmacy to initiate an "
+            "investigation."
         ),
-        "reference_page": "29-33",
+        "reference_page": "83",
     },
     {
-        "question": "Before a supplier can actually be paid, what does the Contract Management Chief need to do first?",
+        "question": "During the annual full count, a team finds expired items sitting in a normal picking location. Are they allowed to move or bin them on the spot?",
         "reference": (
-            "The Contract Management Chief double-checks the payment amount on "
-            "the Supplier Invoice against other local records, then creates a "
-            "payment request attaching the Supplier Invoice, Purchase Order, "
-            "contract, and other relevant documents, and sends these to the NMS "
-            "President for endorsement before they can be forwarded to a "
-            "Finance Officer."
-        ),
-        "reference_page": "35",
-    },
-    {
-        "question": "How does mSupply decide which batch of stock to give out first when fulfilling a customer order?",
-        "reference": (
-            "mSupply automatically allocates stock according to FEFO (First "
-            "Expiry, First Out) when the Customer Invoice is created."
-        ),
-        "reference_page": "39",
-    },
-    {
-        "question": "What's the difference between using 'Split Stock' and 'Consolidate Stock' in mSupply?",
-        "reference": (
-            "Split Stock moves part of a single batch to a different location, "
-            "used when the same batch needs to be divided across multiple "
-            "storage locations. Consolidate Stock does the opposite - it brings "
-            "stock of the same batch that is currently spread across multiple "
-            "locations together into one single location."
-        ),
-        "reference_page": "63-64",
-    },
-    {
-        "question": "If I'm removing damaged stock in mSupply, when should I use a Negative Inventory Adjustment versus a Stocktake?",
-        "reference": (
-            "Use a Negative Inventory Adjustment if you want to enter the "
-            "quantity of stock being removed. Use a Stocktake if you'd rather "
-            "enter the total quantity of stock remaining after the unusable "
-            "goods have already been removed or destroyed."
-        ),
-        "reference_page": "66-68",
-    },
-    {
-        "question": "What temperature range do cold chain items need to be kept at, and what's the maximum the general warehouse can reach?",
-        "reference": (
-            "Cold chain items must be kept in a fridge or cold room maintained "
-            "at 2-8°C. The general warehouse temperature should stay below 25°C "
-            "whenever possible and must never exceed 30°C."
-        ),
-        "reference_page": "72-73",
-    },
-    {
-        "question": "What needs to be cleared up in mSupply before a full stocktake can start?",
-        "reference": (
-            "Every pending order must be processed, every outstanding Goods "
-            "Receipt must be processed, and every order awaiting dispatch must "
-            "be processed and excluded from the stocktake."
+            "No. During a stocktake no stock is to be moved: expired items or "
+            "stock in the wrong location should still be counted, and only "
+            "moved or destroyed at the end of the stocktake. Any item found on "
+            "the shelf but not on the stocktake list must also be recorded."
         ),
         "reference_page": "79",
     },
     {
-        "question": "Who carries out the monthly warehouse audit, and how is its accuracy percentage worked out?",
+        "question": "A charity drops off a pallet of medicines we never ordered, and the charity isn't in our system. How does that stock get into mSupply?",
         "reference": (
-            "The monthly warehouse audit is carried out by 2 non-warehouse "
-            "staff from the National Pharmacy Division, who check a randomly "
-            "selected 20 items. Accuracy is calculated as (number of correct "
-            "items / total number of items checked) x 100%."
+            "First add the donor as a new Supplier: navigate to the Suppliers "
+            "tab, click New Supplier, and enter at minimum the Code, Charge To "
+            "and Name. Then record the stock with a manual Supplier Invoice: "
+            "Suppliers tab, New Supplier Invoice, enter the supplier, click "
+            "New Line for each received item, enter Number of Packs, Pack "
+            "Size, Batch, Expiry and Location, then check Finalise and click "
+            "OK."
+        ),
+        "reference_page": "69-70",
+    },
+    {
+        "question": "A batch won't fit on a single shelf, so some packs have to live somewhere else. Which mSupply transaction records that, and what exactly do you enter?",
+        "reference": (
+            "Split Stock. Open the item via the Item tab, Item List, search "
+            "and double-click the item, then open the Stock tab. Click the "
+            "line to split, click Split, enter the Quantity to Split (the "
+            "amount being moved) and the New Shelf Location, then click OK. "
+            "The batch's total quantity is unchanged - it is simply stored "
+            "across two locations."
+        ),
+        "reference_page": "62-64",
+    },
+    {
+        "question": "How many people can key results into the mSupply stocktake screen at the same time, and how should data entry be organised during the annual count?",
+        "reference": (
+            "The mSupply Stocktake screen can only be opened by one person at "
+            "a time. Completed stocktake sheets are taken periodically to the "
+            "Warehouse Manager, who enters the actual quantities consistently "
+            "throughout the week rather than at the very end; the Warehouse "
+            "Manager may ask Team Leaders to assist so that data entry never "
+            "becomes a bottleneck."
+        ),
+        "reference_page": "80-81",
+    },
+    {
+        "question": "How long must the paperwork proving the fridge thermometers were serviced and calibrated be kept on file?",
+        "reference": (
+            "Certificates of Servicing and Calibration must be retained with "
+            "the Master Calibration Log for a minimum of 5 years. All "
+            "thermometers are calibrated initially when purchased and annually "
+            "thereafter, and every temperature gauge must be accurate to "
+            "within 0.5°C."
+        ),
+        "reference_page": "74-75",
+    },
+    {
+        "question": "There's a percentage chart pinned up in the warehouse each month. What is it, who produces it, and how is the number worked out?",
+        "reference": (
+            "It is the warehouse audit accuracy figure. In the middle of each "
+            "month, 2 non-warehouse staff from the National Pharmacy Division "
+            "check 20 randomly selected items; an item counts as correct only "
+            "if its location, batch, expiry and quantity all match mSupply. "
+            "The percentage is calculated as (number of correct items / total "
+            "number of items checked, i.e. 20) x 100%, then graphed each month "
+            "and displayed in the warehouse for all staff to see."
         ),
         "reference_page": "82",
     },
     {
-        "question": "How often does stock have to be checked against the DDA Register, and who does that check?",
+        "question": "Right before a goods receipt is finalised in the system, someone physically walks the warehouse. Who is it and what are they checking for?",
         "reference": (
-            "Controlled substances must be audited against the DDA Register at "
-            "least once every 3 months, carried out by two staff members: the "
-            "Warehouse Manager and the DDA Coordinator (selected on a "
-            "rotational basis)."
+            "The Warehouse Manager walks through the warehouse to ensure the "
+            "proposed locations have sufficient space for the incoming "
+            "products. Only when the Warehouse Manager is satisfied everything "
+            "is correct do they finalise the Goods Receipt in mSupply, which "
+            "generates the Supplier Invoice."
         ),
-        "reference_page": "83",
+        "reference_page": "29",
+    },
+    {
+        "question": "A supplier flat-out refuses to take back or replace stock that failed inspection. What happens next?",
+        "reference": (
+            "The Warehouse Manager removes the product from the Purchase Order "
+            "in mSupply, and Procurement and Finance commence dispute "
+            "processes according to the specific contract conditions. The "
+            "stock is then sourced elsewhere by the Contract Management Chief. "
+            "The supplier must refund any money already paid on the contract "
+            "(as a credit to NMS) and may forfeit a percentage of their "
+            "performance security, depending on the contract terms."
+        ),
+        "reference_page": "24",
+    },
+    {
+        "question": "Some health facilities still send handwritten orders. How do those get into the system, and what happens if an approval request just sits there unactioned?",
+        "reference": (
+            "If a facility is not using mSupply, the relevant Team Leader must "
+            "manually enter the paper order as a Requisition in mSupply. Where "
+            "authorisation is required before orders are sent, a request that "
+            "is not attended to within a predetermined period (e.g. 4 days) is "
+            "automatically authorised."
+        ),
+        "reference_page": "39",
+    },
+    {
+        "question": "Which items are deliberately kept on low, easy-to-reach shelving, and which are allowed to go up high?",
+        "reference": (
+            "Items with short expiry dates should be stored in easily "
+            "accessible, low-shelf locations, while bulk items with long "
+            "expiry dates may be stored in higher, more inaccessible areas. If "
+            "'next to expire' stock is found in a high, inaccessible location, "
+            "it should be moved to a low, accessible one."
+        ),
+        "reference_page": "59",
     },
 ]
 
@@ -116,13 +159,13 @@ class RetrivalMetrics:
 
     def __init__(self):
         self.__llm_client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
-        self.__llm = llm_factory("gpt-4.1-mini", client=self.__llm_client)
+        self.__llm = llm_factory("gpt-4.1-mini", client=self.__llm_client, max_tokens=4096)
         self.__retriever = settings.index.as_retriever(
             vector_store_query_mode=VectorStoreQueryMode.HYBRID,
-            similarity_top_k=1
+            similarity_top_k=3
         )
         self.results = {}
-        self.__semaphore = asyncio.Semaphore(4)
+        self.__semaphore = asyncio.Semaphore(2)
 
     async def context_precision(self, question: str, reference: str, retrieved_contexts: list[str]):
         context_precision = ContextPrecision(llm=self.__llm)

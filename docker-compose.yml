@@ -1,0 +1,33 @@
+services:
+    pgvector-db:
+      image: pgvector/pgvector:pg16
+      container_name: wms-sop-pgvector
+      restart: unless-stopped
+      environment:
+        POSTGRES_USER: ${PG_USER}
+        POSTGRES_PASSWORD: ${PG_PASSWORD}
+        POSTGRES_DB: ${PG_DATABASE}
+      ports:
+        - "5432:5432"
+      volumes:
+        - pgvector_data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DATABASE}"]
+        interval: 5s
+        timeout: 5s
+        retries: 10
+    wms-sop-mcp:
+        build: .
+        image: wms_sop_mcp-wms-sop-mcp:latest
+        container_name: wms-sop-mcp
+        restart: unless-stopped
+        env_file: .env
+        environment:
+          PG_HOST: pgvector-db
+        ports:
+          - "8001:8001"
+        depends_on:
+          pgvector-db:
+            condition: service_healthy
+volumes:
+    pgvector_data:

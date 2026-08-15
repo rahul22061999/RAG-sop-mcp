@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 
 import click
-
 from logging_config import setup_logging
 
 PID_FILE = Path("/tmp/wms-sop-mcp.pid")
@@ -14,7 +13,6 @@ logger = logging.getLogger(__name__)
 @click.group()
 def cli():
     """WMS MCP CLI."""
-    pass
 
 @cli.command()
 def start():

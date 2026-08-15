@@ -15,7 +15,7 @@ def setup_logging(log_level: str = "INFO", log_file: str = "logs/wms-sop-mcp.log
 
     file_handler = logging.handlers.RotatingFileHandler(
         log_path,
-        maxBytes=10 * 1024 * 1024,  # 10 MB per file
+        maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8"
     )

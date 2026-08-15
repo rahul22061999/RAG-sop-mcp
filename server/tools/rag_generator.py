@@ -1,11 +1,9 @@
-import asyncio
 import json
 
-from llama_index.core import PromptTemplate
-from pydantic import BaseModel, Field
-from llama_index.llms.ollama import Ollama
-
 from config.settings import settings
+from llama_index.core import PromptTemplate
+from llama_index.llms.ollama import Ollama
+from pydantic import BaseModel, Field
 
 
 class SOPResponse(BaseModel):
