@@ -8,6 +8,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PG_HOST: ci-placeholder
+      PG_DATABASE: ci-placeholder
+      PG_USER: ci-placeholder
+      PG_PASSWORD: ci-placeholder
+      OPENAI_API_KEY: sk-ci-placeholder
+      OPENAI_EMBEDDING_MODEL: text-embedding-3-small
+      UNKEY_ROOT_API_KEY: ci-placeholder
     steps:
       - uses: actions/checkout@v4
 
