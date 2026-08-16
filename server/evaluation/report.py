@@ -70,28 +70,52 @@ def _stat_tile(label: str, value: float, color: str) -> str:
     </div>"""
 
 
-def render_report(retrieval_results: dict, generation_results: dict, output_path: str) -> None:
-    tiles = "".join([
-        _stat_tile("Context Precision", _avg(retrieval_results, "context_precision"), SERIES_A),
-        _stat_tile("Context Recall", _avg(retrieval_results, "context_recall"), SERIES_B),
-        _stat_tile("Faithfulness", _avg(generation_results, "context_faithfulness"), SERIES_A),
-        _stat_tile("Answer Relevancy", _avg(generation_results, "context_relevance"), SERIES_B),
-    ])
+def render_report(
+    retrieval_results: dict, generation_results: dict, output_path: str
+) -> None:
+    tiles = "".join(
+        [
+            _stat_tile(
+                "Context Precision",
+                _avg(retrieval_results, "context_precision"),
+                SERIES_A,
+            ),
+            _stat_tile(
+                "Context Recall", _avg(retrieval_results, "context_recall"), SERIES_B
+            ),
+            _stat_tile(
+                "Faithfulness",
+                _avg(generation_results, "context_faithfulness"),
+                SERIES_A,
+            ),
+            _stat_tile(
+                "Answer Relevancy",
+                _avg(generation_results, "context_relevance"),
+                SERIES_B,
+            ),
+        ]
+    )
 
     retrieval_blocks = "".join(
-        _question_block(question, [
-            ("Precision", scores["context_precision"], SERIES_A),
-            ("Recall", scores["context_recall"], SERIES_B),
-        ])
+        _question_block(
+            question,
+            [
+                ("Precision", scores["context_precision"], SERIES_A),
+                ("Recall", scores["context_recall"], SERIES_B),
+            ],
+        )
         for question, scores in retrieval_results.items()
         if "context_precision" in scores and "context_recall" in scores
     )
 
     generation_blocks = "".join(
-        _question_block(question, [
-            ("Faithfulness", scores["context_faithfulness"], SERIES_A),
-            ("Relevancy", scores["context_relevance"], SERIES_B),
-        ])
+        _question_block(
+            question,
+            [
+                ("Faithfulness", scores["context_faithfulness"], SERIES_A),
+                ("Relevancy", scores["context_relevance"], SERIES_B),
+            ],
+        )
         for question, scores in generation_results.items()
         if "context_faithfulness" in scores and "context_relevance" in scores
     )
@@ -190,7 +214,8 @@ async def main() -> None:
     Path("eval_report.json").write_text(
         json.dumps(
             {"retrieval": retrieval_results, "generation": generation_results},
-            indent=2, ensure_ascii=False,
+            indent=2,
+            ensure_ascii=False,
         ),
         encoding="utf-8",
     )

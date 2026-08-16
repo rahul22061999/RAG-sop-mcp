@@ -1,4 +1,3 @@
-# Measure Retrieval and generation seperately
 import asyncio
 
 from config import settings
@@ -155,19 +154,24 @@ GROUND_TRUTH = [
     },
 ]
 
-class RetrivalMetrics:
 
+class RetrivalMetrics:
     def __init__(self):
-        self.__llm_client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
-        self.__llm = llm_factory("gpt-4.1-mini", client=self.__llm_client, max_tokens=4096)
+        self.__llm_client = AsyncOpenAI(
+            api_key=settings.openai_api_key.get_secret_value()
+        )
+        self.__llm = llm_factory(
+            "gpt-4.1-mini", client=self.__llm_client, max_tokens=4096
+        )
         self.__retriever = settings.index.as_retriever(
-            vector_store_query_mode=VectorStoreQueryMode.HYBRID,
-            similarity_top_k=3
+            vector_store_query_mode=VectorStoreQueryMode.HYBRID, similarity_top_k=3
         )
         self.results = {}
         self.__semaphore = asyncio.Semaphore(2)
 
-    async def context_precision(self, question: str, reference: str, retrieved_contexts: list[str]):
+    async def context_precision(
+        self, question: str, reference: str, retrieved_contexts: list[str]
+    ):
         context_precision = ContextPrecision(llm=self.__llm)
 
         async with self.__semaphore:
@@ -179,7 +183,9 @@ class RetrivalMetrics:
 
         return result.value
 
-    async def context_recall(self, question: str, reference: str, retrieved_contexts: list[str]):
+    async def context_recall(
+        self, question: str, reference: str, retrieved_contexts: list[str]
+    ):
         context_recall = ContextRecall(llm=self.__llm)
 
         async with self.__semaphore:
@@ -191,24 +197,18 @@ class RetrivalMetrics:
 
         return result.value
 
-    async def evaluate( self,
-        question: str,
-        reference: str
-    ):
+    async def evaluate(self, question: str, reference: str):
         retrieved_nodes = await self.__retriever.aretrieve(question)
-        retrieved_contexts = [
-            node.node.get_content()
-            for node in retrieved_nodes
-        ]
+        retrieved_contexts = [node.node.get_content() for node in retrieved_nodes]
 
         precision, recall = await asyncio.gather(
             self.context_precision(question, reference, retrieved_contexts),
-            self.context_recall(question, reference, retrieved_contexts)
+            self.context_recall(question, reference, retrieved_contexts),
         )
 
         self.results[question] = {
             "context_precision": precision,
-            "context_recall": recall
+            "context_recall": recall,
         }
 
     async def get_results(self):
@@ -225,11 +225,7 @@ async def main():
         for data in GROUND_TRUTH
     ]
 
-
-    await tqdm_asyncio.gather(
-        *tasks,
-        desc="Evaluating questions"
-    )
+    await tqdm_asyncio.gather(*tasks, desc="Evaluating questions")
 
     result = await metrics.get_results()
 
@@ -239,8 +235,5 @@ async def main():
         print(f"Recall: {value['context_recall']}")
 
 
-
-
 if __name__ == "__main__":
-
     asyncio.run(main())

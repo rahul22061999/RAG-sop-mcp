@@ -67,7 +67,9 @@ async def test_bearer_with_no_key_is_rejected(mocker):
 
 @pytest.mark.asyncio
 async def test_revoked_key_is_rejected(mocker):
-    middleware = _make_middleware(mocker, verify_result=_Result(valid=False, code="REVOKED"))
+    middleware = _make_middleware(
+        mocker, verify_result=_Result(valid=False, code="REVOKED")
+    )
     _headers(mocker, {"authorization": "Bearer sk_revoked"})
 
     with pytest.raises(ToolError, match="invalid or revoked"):

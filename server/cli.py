@@ -14,13 +14,19 @@ logger = logging.getLogger(__name__)
 def cli():
     """WMS MCP CLI."""
 
+
 @cli.command()
 def start():
     """Start the WMS SOP MCP server."""
     from app import mcp, settings
 
     setup_logging(log_level=settings.log_level, log_file=settings.log_file)
-    logger.info("Starting %s on port %d (log_file=%s)", settings.service_name, settings.port, settings.log_file)
+    logger.info(
+        "Starting %s on port %d (log_file=%s)",
+        settings.service_name,
+        settings.port,
+        settings.log_file,
+    )
 
     PID_FILE.write_text(str(os.getpid()))
     try:

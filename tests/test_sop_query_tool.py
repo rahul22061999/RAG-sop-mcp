@@ -90,7 +90,9 @@ async def test_flattens_nodes_into_json_serializable_dicts(mocker, fake_index):
     async def fake_generate_sop_context(question, data):
         captured["question"] = question
         captured["data"] = data
-        return _FakeSOPResponse({"answer": "ok", "citations": ["35"], "confidence": 1.0})
+        return _FakeSOPResponse(
+            {"answer": "ok", "citations": ["35"], "confidence": 1.0}
+        )
 
     mocker.patch(
         "tools.sop_query_tool.generate_sop_context",
@@ -136,7 +138,9 @@ async def test_empty_retrieval_still_reaches_generator(mocker, fake_index):
 
     async def fake_generate_sop_context(question, data):
         assert data == []
-        return _FakeSOPResponse({"answer": "not found", "citations": [], "confidence": 0.0})
+        return _FakeSOPResponse(
+            {"answer": "not found", "citations": [], "confidence": 0.0}
+        )
 
     mocker.patch(
         "tools.sop_query_tool.generate_sop_context",

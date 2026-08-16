@@ -57,7 +57,9 @@ def test_password_with_at_symbol_is_escaped_not_mangled():
 
 
 def test_table_and_schema_pass_through():
-    settings = _make_settings(pg_table_name="custom_chunks", pg_schema_name="custom_schema")
+    settings = _make_settings(
+        pg_table_name="custom_chunks", pg_schema_name="custom_schema"
+    )
     store = settings.vector_store
 
     assert store.table_name == "custom_chunks"

@@ -7,6 +7,7 @@ from tools.rag_generator import generate_sop_context
 
 logger = logging.getLogger(__name__)
 
+
 async def sop_query_tool(
     query: str,
     top_records: int = 5,

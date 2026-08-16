@@ -10,18 +10,17 @@ from sqlalchemy.engine import URL
 
 ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_PATH,
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
     )
 
     service_name: str = "wms-sop-server"
-    service_description: str = (
-        "Production-grade RAG WMS MCP service"
-    )
+    service_description: str = "Production-grade RAG WMS MCP service"
 
     port: int = 8001
     log_level: str = "INFO"
@@ -42,7 +41,6 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr
     openai_embedding_model: str
 
-    # unkey cred
     unkey_root_api_key: SecretStr
 
     # Ollama endpoint used for answer generation (server/tools/rag_generator.py).
@@ -62,7 +60,6 @@ class Settings(BaseSettings):
 
     @cached_property
     def vector_store(self) -> PGVectorStore:
-
         base_url = URL.create(
             drivername="postgresql",
             username=self.pg_user,
@@ -77,11 +74,7 @@ class Settings(BaseSettings):
         ).render_as_string(hide_password=False)
         async_connection_string = base_url.set(
             drivername="postgresql+asyncpg",
-            query=(
-                {}
-                if self.pg_ssl_mode == "disable"
-                else {"ssl": self.pg_ssl_mode}
-            ),
+            query=({} if self.pg_ssl_mode == "disable" else {"ssl": self.pg_ssl_mode}),
         ).render_as_string(hide_password=False)
 
         return PGVectorStore(

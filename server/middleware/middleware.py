@@ -21,17 +21,11 @@ class UnkeyAuthMiddleware(Middleware):
         scheme, _, api_key = authorization.partition(" ")
 
         if scheme.lower() != "bearer" or not api_key:
-            raise ToolError(
-                "Unauthorized: send Authorization: Bearer <api-key>"
-            )
+            raise ToolError("Unauthorized: send Authorization: Bearer <api-key>")
         try:
-            result = await self._unkey.keys.verify_key_async(
-                key=api_key.strip()
-            )
+            result = await self._unkey.keys.verify_key_async(key=api_key.strip())
         except APIError as exc:
-            raise ToolError(
-                f"Authentication provider error: {exc.message}"
-            ) from exc
+            raise ToolError(f"Authentication provider error: {exc.message}") from exc
 
         if not result.data or not result.data.valid:
             raise ToolError(

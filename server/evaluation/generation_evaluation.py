@@ -269,10 +269,13 @@ GROUND_TRUTH = [
 
 
 class RAGGenerationEvaluation:
-
     def __init__(self):
-        self.__llm_client = AsyncOpenAI(api_key=settings.openai_api_key.get_secret_value())
-        self.__llm = llm_factory("gpt-4.1-mini", client=self.__llm_client, max_tokens=4096)
+        self.__llm_client = AsyncOpenAI(
+            api_key=settings.openai_api_key.get_secret_value()
+        )
+        self.__llm = llm_factory(
+            "gpt-4.1-mini", client=self.__llm_client, max_tokens=4096
+        )
         self.__embeddings = embedding_factory(
             provider="openai", model="text-embedding-3-small", client=self.__llm_client
         )
@@ -280,37 +283,34 @@ class RAGGenerationEvaluation:
         self.__semaphore = asyncio.Semaphore(8)
         self.__ollama_semaphore = asyncio.Semaphore(1)
 
-
-    async def context_faithfulness(self, question: str, llm_response: str, retrieved_contexts: list[str]) -> float:
+    async def context_faithfulness(
+        self, question: str, llm_response: str, retrieved_contexts: list[str]
+    ) -> float:
         context_faithfulness = Faithfulness(llm=self.__llm)
 
         async with self.__semaphore:
-           result = await context_faithfulness.ascore(
-               user_input=question,
-               response=llm_response,
-               retrieved_contexts=retrieved_contexts
-           )
+            result = await context_faithfulness.ascore(
+                user_input=question,
+                response=llm_response,
+                retrieved_contexts=retrieved_contexts,
+            )
 
-           return result.value
+            return result.value
 
     async def context_relevance(self, question: str, llm_response: str) -> float:
-        context_relevance = AnswerRelevancy(llm=self.__llm, embeddings=self.__embeddings)
+        context_relevance = AnswerRelevancy(
+            llm=self.__llm, embeddings=self.__embeddings
+        )
 
         async with self.__semaphore:
-           result = await context_relevance.ascore(
-               user_input=question,
-               response=llm_response,
-           )
+            result = await context_relevance.ascore(
+                user_input=question,
+                response=llm_response,
+            )
 
-           return result.value
+            return result.value
 
-
-    async def evaluate(
-            self,
-            question: str,
-            context: str
-        ):
-
+    async def evaluate(self, question: str, context: str):
         async with self.__ollama_semaphore:
             generated = await generate_sop_context(question, [context])
 
@@ -318,7 +318,7 @@ class RAGGenerationEvaluation:
 
         faithfulness, relevance = await asyncio.gather(
             self.context_faithfulness(question, llm_response, [context]),
-            self.context_relevance(question, llm_response)
+            self.context_relevance(question, llm_response),
         )
 
         self.results[question] = {
@@ -328,8 +328,7 @@ class RAGGenerationEvaluation:
         }
 
     async def get_results(self):
-        return  self.results
-
+        return self.results
 
 
 async def main():
@@ -343,11 +342,7 @@ async def main():
         for data in GROUND_TRUTH
     ]
 
-
-    await tqdm_asyncio.gather(
-        *tasks,
-        desc="Evaluating questions"
-    )
+    await tqdm_asyncio.gather(*tasks, desc="Evaluating questions")
 
     result = await metrics.get_results()
 
@@ -359,8 +354,5 @@ async def main():
         print()
 
 
-
-
 if __name__ == "__main__":
-
     asyncio.run(main())

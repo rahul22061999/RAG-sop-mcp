@@ -127,7 +127,9 @@ class DocumentIngestor:
         )
 
         markdown = result.document.export_to_markdown()
-        doc_dict = result.document.export_to_dict() if self.include_raw_document else None
+        doc_dict = (
+            result.document.export_to_dict() if self.include_raw_document else None
+        )
 
         output_md_path.write_text(markdown, encoding="utf-8")
 

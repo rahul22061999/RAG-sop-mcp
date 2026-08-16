@@ -3,7 +3,9 @@ import logging.handlers
 from pathlib import Path
 
 
-def setup_logging(log_level: str = "INFO", log_file: str = "logs/wms-sop-mcp.log") -> None:
+def setup_logging(
+    log_level: str = "INFO", log_file: str = "logs/wms-sop-mcp.log"
+) -> None:
     log_path = Path(log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -14,10 +16,7 @@ def setup_logging(log_level: str = "INFO", log_file: str = "logs/wms-sop-mcp.log
     level = getattr(logging, log_level.upper(), logging.INFO)
 
     file_handler = logging.handlers.RotatingFileHandler(
-        log_path,
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8"
+        log_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
     file_handler.setFormatter(fmt)
 

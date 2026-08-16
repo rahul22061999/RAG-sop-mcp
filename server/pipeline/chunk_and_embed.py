@@ -56,30 +56,28 @@ class SOPLLMCleaner(TransformComponent):
         return cleaned_nodes
 
     def clean_text(self, text: str) -> str:
-        prompt = f"""
-            You are cleaning OCR-extracted warehouse SOP text.
-            
-            Fix:
-            - obvious OCR mistakes
-            - broken line breaks
-            - broken spacing
-            - obvious button-label OCR errors when the intended label is clear
-            - generic image-description phrasing that adds no useful information
-            
-            Important:
-            - Do not summarize.
-            - Do not add new instructions.
-            - Do not remove procedural steps.
-            - Preserve headings, numbered steps, bullets, warnings, and tables.
-            - Preserve WMS-specific names unless they are obvious OCR mistakes.
-            - Preserve all page-continuation information.
-            - If a button label is clearly wrong because of OCR, correct it.
-            - Example: "OK & Net" should become "OK & Next".
-            - Return only the cleaned text.
-            
-            Text:
-            {text}
-            """.strip()
+        prompt = f"""You are cleaning OCR-extracted warehouse SOP text.
+
+Fix:
+- obvious OCR mistakes
+- broken line breaks
+- broken spacing
+- obvious button-label OCR errors when the intended label is clear
+- generic image-description phrasing that adds no useful information
+
+Important:
+- Do not summarize.
+- Do not add new instructions.
+- Do not remove procedural steps.
+- Preserve headings, numbered steps, bullets, warnings, and tables.
+- Preserve WMS-specific names unless they are obvious OCR mistakes.
+- Preserve all page-continuation information.
+- If a button label is clearly wrong because of OCR, correct it.
+- Example: "OK & Net" should become "OK & Next".
+- Return only the cleaned text.
+
+Text:
+{text}"""
 
         return str(self.llm.complete(prompt)).strip()
 
@@ -132,18 +130,14 @@ class DocumentIngestChunkEmbedPipeline:
         self.doc_type = doc_type
         self.next_page_context_chars = next_page_context_chars
 
-        self.openai_api_key = (
-            openai_api_key or os.getenv("OPENAI_API_KEY")
-        )
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
 
         self.pg_host = pg_host or os.getenv("PG_HOST")
         self.pg_port = pg_port or int(os.getenv("PG_PORT", "5432"))
         self.pg_database = pg_database or os.getenv("PG_DATABASE")
         self.pg_user = pg_user or os.getenv("PG_USER")
         self.pg_password = pg_password or os.getenv("PG_PASSWORD")
-        self.pg_table_name = (
-            pg_table_name or os.getenv("PG_TABLE_NAME") or "sop_chunks"
-        )
+        self.pg_table_name = pg_table_name or os.getenv("PG_TABLE_NAME") or "sop_chunks"
         self.pg_schema_name = pg_schema_name
         self.pg_embed_dim = pg_embed_dim
         self.pg_ssl_mode = os.getenv("PG_SSL_MODE", "disable")
@@ -211,21 +205,15 @@ class DocumentIngestChunkEmbedPipeline:
             raise ValueError("Missing PG_PASSWORD")
 
         if self.next_page_context_chars < 0:
-            raise ValueError(
-                "next_page_context_chars cannot be negative"
-            )
+            raise ValueError("next_page_context_chars cannot be negative")
 
     def load_docling_json(self) -> dict[str, Any]:
         if not self.json_path.exists():
-            raise FileNotFoundError(
-                f"Docling JSON not found: {self.json_path}"
-            )
+            raise FileNotFoundError(f"Docling JSON not found: {self.json_path}")
 
         logger.info("Loading Docling JSON: %s", self.json_path)
 
-        return json.loads(
-            self.json_path.read_text(encoding="utf-8")
-        )
+        return json.loads(self.json_path.read_text(encoding="utf-8"))
 
     def build_page_documents(self) -> list[Document]:
         """
@@ -233,9 +221,7 @@ class DocumentIngestChunkEmbedPipeline:
         """
 
         data = self.load_docling_json()
-        docling_document = DoclingDocument.model_validate(
-            data["document"]
-        )
+        docling_document = DoclingDocument.model_validate(data["document"])
 
         page_documents: list[Document] = []
         total_pages = len(docling_document.pages)
@@ -296,8 +282,6 @@ class DocumentIngestChunkEmbedPipeline:
         self,
         page_documents: list[Document],
     ) -> list[Document]:
-
-
         logger.info(
             "Cleaning %s page Documents",
             len(page_documents),
@@ -314,42 +298,28 @@ class DocumentIngestChunkEmbedPipeline:
         self,
         page_documents: list[Document],
     ) -> list[Document]:
-
-
         chunking_documents: list[Document] = []
 
         for index, current_document in enumerate(page_documents):
-            current_page = int(
-                current_document.metadata["page_number"]
-            )
+            current_page = int(current_document.metadata["page_number"])
 
             next_document = (
-                page_documents[index + 1]
-                if index + 1 < len(page_documents)
-                else None
+                page_documents[index + 1] if index + 1 < len(page_documents) else None
             )
 
             covered_pages = [current_page]
             next_page: int | None = None
 
-            combined_text = (
-                f"[PAGE {current_page}]\n"
-                f"{current_document.text}"
-            )
+            combined_text = f"[PAGE {current_page}]\n{current_document.text}"
 
             if next_document is not None:
-                next_page = int(
-                    next_document.metadata["page_number"]
-                )
+                next_page = int(next_document.metadata["page_number"])
                 covered_pages.append(next_page)
 
-                next_page_text = next_document.text[
-                    : self.next_page_context_chars
-                ]
+                next_page_text = next_document.text[: self.next_page_context_chars]
 
                 combined_text += (
-                    f"\n\n[CONTINUATION FROM PAGE {next_page}]\n"
-                    f"{next_page_text}"
+                    f"\n\n[CONTINUATION FROM PAGE {next_page}]\n{next_page_text}"
                 )
 
             chunking_document = Document(
@@ -445,22 +415,12 @@ class DocumentIngestChunkEmbedPipeline:
                 "node_id": node.node_id,
                 "text": node.text,
                 "metadata": node.metadata,
-                "primary_page_number": node.metadata.get(
-                    "primary_page_number"
-                ),
-                "next_page_number": node.metadata.get(
-                    "next_page_number"
-                ),
-                "covered_pages": node.metadata.get(
-                    "covered_pages"
-                ),
-                "document_title": node.metadata.get(
-                    "document_title"
-                ),
+                "primary_page_number": node.metadata.get("primary_page_number"),
+                "next_page_number": node.metadata.get("next_page_number"),
+                "covered_pages": node.metadata.get("covered_pages"),
+                "document_title": node.metadata.get("document_title"),
                 "questions_this_excerpt_can_answer": (
-                    node.metadata.get(
-                        "questions_this_excerpt_can_answer"
-                    )
+                    node.metadata.get("questions_this_excerpt_can_answer")
                 ),
             }
             for index, node in enumerate(nodes)
@@ -483,7 +443,6 @@ class DocumentIngestChunkEmbedPipeline:
     def create_pg_vector_store(
         self,
     ) -> PGVectorStore:
-
         base_url = URL.create(
             drivername="postgresql",
             username=self.pg_user,
@@ -498,11 +457,7 @@ class DocumentIngestChunkEmbedPipeline:
         ).render_as_string(hide_password=False)
         async_connection_string = base_url.set(
             drivername="postgresql+asyncpg",
-            query=(
-                {}
-                if self.pg_ssl_mode == "disable"
-                else {"ssl": self.pg_ssl_mode}
-            ),
+            query=({} if self.pg_ssl_mode == "disable" else {"ssl": self.pg_ssl_mode}),
         ).render_as_string(hide_password=False)
 
         return PGVectorStore(
@@ -532,7 +487,6 @@ class DocumentIngestChunkEmbedPipeline:
             vector_store=vector_store,
         )
 
-
         VectorStoreIndex(
             nodes,
             storage_context=storage_context,
@@ -540,41 +494,19 @@ class DocumentIngestChunkEmbedPipeline:
             show_progress=True,
         )
 
-        logger.info(
-            "Postgres pgvector indexing completed"
-        )
+        logger.info("Postgres pgvector indexing completed")
 
     def run(self) -> None:
-
         page_documents = self.build_page_documents()
+        cleaned_page_documents = self.clean_page_documents(page_documents)
+        self.save_documents_preview(cleaned_page_documents)
 
-
-        cleaned_page_documents = self.clean_page_documents(
-            page_documents
-        )
-
-
-        self.save_documents_preview(
+        chunking_documents = self.build_cross_page_chunking_documents(
             cleaned_page_documents
         )
-
-
-        chunking_documents = (
-            self.build_cross_page_chunking_documents(
-                cleaned_page_documents
-            )
-        )
-
-
-        nodes = self.split_and_enrich_nodes(
-            chunking_documents
-        )
-
+        nodes = self.split_and_enrich_nodes(chunking_documents)
         self.save_nodes_preview(nodes)
-
 
         self.save_nodes_to_pg(nodes)
 
-        logger.info(
-            "Pipeline finished. Data saved to Postgres pgvector."
-        )
+        logger.info("Pipeline finished. Data saved to Postgres pgvector.")
