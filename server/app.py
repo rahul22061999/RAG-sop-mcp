@@ -23,7 +23,7 @@ def _logged(fn):
             return result
         except Exception as e:
             logger.error(
-                "Tool failed: %s (%.3fs) — %s", fn.__name__, time.monotonic() - t0, e
+                "Tool failed: %s (%.3fs) - %s", fn.__name__, time.monotonic() - t0, e
             )
             raise
 

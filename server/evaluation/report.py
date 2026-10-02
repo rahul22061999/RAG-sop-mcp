@@ -125,7 +125,7 @@ def render_report(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WMS SOP RAG — Evaluation Report</title>
+<title>WMS SOP RAG - Evaluation Report</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{
@@ -172,14 +172,14 @@ def render_report(
 </head>
 <body>
 <div class="page">
-  <h1>WMS SOP RAG — Evaluation Report</h1>
+  <h1>WMS SOP RAG - Evaluation Report</h1>
   <p class="subtitle">Retrieval and generation measured independently with ragas ·
     {len(retrieval_results)} retrieval questions · {len(generation_results)} generation questions · {date.today():%d %b %Y}</p>
 
   <div class="tiles">{tiles}</div>
 
   <div class="card">
-    <h2>Retrieval — per question</h2>
+    <h2>Retrieval - per question</h2>
     <p class="card-sub">Hybrid search (pgvector + full-text) scored against hand-written references from the SOP PDF</p>
     <div class="legend">
       <span><i style="background:{SERIES_A}"></i>Context Precision</span>
@@ -189,7 +189,7 @@ def render_report(
   </div>
 
   <div class="card">
-    <h2>Generation — per question</h2>
+    <h2>Generation - per question</h2>
     <p class="card-sub">Fixed known-correct contexts (with noise chunks), so scores isolate the generator</p>
     <div class="legend">
       <span><i style="background:{SERIES_A}"></i>Faithfulness</span>

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_file: str = "logs/wms-sop-mcp.log"
 
-    # Postgres (pgvector) — Google Cloud SQL / AlloyDB or any Postgres
+    # Postgres (pgvector) - Google Cloud SQL / AlloyDB or any Postgres
     # instance with the pgvector extension enabled.
     pg_host: str
     pg_port: int = 5432
