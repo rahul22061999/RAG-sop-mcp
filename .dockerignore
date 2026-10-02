@@ -1,9 +1,0 @@
-.venv/
-.git/
-.env
-logs/
-__pycache__/
-*.pyc
-.python-version
-*.ipynb
-.idea/
