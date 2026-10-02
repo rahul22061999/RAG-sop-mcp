@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -7,6 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from config.settings import Settings
 from docling_core.types import DoclingDocument
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.extractors import (
@@ -15,8 +17,9 @@ from llama_index.core.extractors import (
 )
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import BaseNode, TransformComponent
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.core.schema import BaseNode
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.llms.ollama import Ollama
 from llama_index.llms.openai import OpenAI
 from llama_index.vector_stores.postgres import PGVectorStore
 from sqlalchemy.engine import URL
@@ -24,65 +27,7 @@ from sqlalchemy.engine import URL
 logger = logging.getLogger(__name__)
 
 
-class SOPLLMCleaner(TransformComponent):
-    """Clean OCR-extracted SOP text before chunking."""
-
-    llm: Any
-
-    def __init__(self, llm: Any) -> None:
-        super().__init__(llm=llm)
-
-    def __call__(
-        self,
-        nodes: Sequence[BaseNode],
-        **kwargs: Any,
-    ) -> list[BaseNode]:
-        cleaned_nodes: list[BaseNode] = []
-        total = len(nodes)
-
-        for index, node in enumerate(nodes, start=1):
-            logger.info("Cleaning page %s/%s", index, total)
-
-            original_text = node.text or ""
-
-            if not original_text.strip():
-                cleaned_nodes.append(node)
-                continue
-
-            cleaned_text = self.clean_text(original_text)
-            node.set_content(cleaned_text)
-            cleaned_nodes.append(node)
-
-        return cleaned_nodes
-
-    def clean_text(self, text: str) -> str:
-        prompt = f"""You are cleaning OCR-extracted warehouse SOP text.
-
-Fix:
-- obvious OCR mistakes
-- broken line breaks
-- broken spacing
-- obvious button-label OCR errors when the intended label is clear
-- generic image-description phrasing that adds no useful information
-
-Important:
-- Do not summarize.
-- Do not add new instructions.
-- Do not remove procedural steps.
-- Preserve headings, numbered steps, bullets, warnings, and tables.
-- Preserve WMS-specific names unless they are obvious OCR mistakes.
-- Preserve all page-continuation information.
-- If a button label is clearly wrong because of OCR, correct it.
-- Example: "OK & Net" should become "OK & Next".
-- Return only the cleaned text.
-
-Text:
-{text}"""
-
-        return str(self.llm.complete(prompt)).strip()
-
-
-class DocumentIngestChunkEmbedPipeline:
+class DocumentChunkEmbedPipeline:
     """
     Pipeline:
 
@@ -104,23 +49,14 @@ class DocumentIngestChunkEmbedPipeline:
         module: str = "DTAC",
         system: str = "WMS",
         doc_type: str = "sop",
-        llm_model: str = "gpt-4.1-mini",
-        embedding_model: str = "text-embedding-3-small",
         chunk_size: int = 1200,
         chunk_overlap: int = 200,
         next_page_context_chars: int = 2000,
         title_nodes: int = 5,
         questions_per_chunk: int = 3,
-        openai_api_key: str | None = None,
-        pg_host: str | None = None,
-        pg_port: int | None = None,
-        pg_database: str | None = None,
-        pg_user: str | None = None,
-        pg_password: str | None = None,
-        pg_table_name: str | None = None,
-        pg_schema_name: str = "public",
-        pg_embed_dim: int = 1536,
+        config: Settings | None = None
     ) -> None:
+        self.config = config if config else Settings()
         self.json_path = Path(json_input_path)
         self.document_output_path = Path(document_output_path)
         self.node_output_path = Path(node_output_path)
@@ -130,32 +66,18 @@ class DocumentIngestChunkEmbedPipeline:
         self.doc_type = doc_type
         self.next_page_context_chars = next_page_context_chars
 
-        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-
-        self.pg_host = pg_host or os.getenv("PG_HOST")
-        self.pg_port = pg_port or int(os.getenv("PG_PORT", "5432"))
-        self.pg_database = pg_database or os.getenv("PG_DATABASE")
-        self.pg_user = pg_user or os.getenv("PG_USER")
-        self.pg_password = pg_password or os.getenv("PG_PASSWORD")
-        self.pg_table_name = pg_table_name or os.getenv("PG_TABLE_NAME") or "sop_chunks"
-        self.pg_schema_name = pg_schema_name
-        self.pg_embed_dim = pg_embed_dim
-        self.pg_ssl_mode = os.getenv("PG_SSL_MODE", "disable")
-
-        self._validate_configuration()
-
-        self.llm = OpenAI(
-            model=llm_model,
-            temperature=0,
-            api_key=self.openai_api_key,
+        
+        self.llm= Ollama(
+            base_url=self.config.ollama_base_url, 
+            model=self.config.ollama_model,
+            request_timeout=self.config.ollama_request_timeout
         )
 
-        self.embed_model = OpenAIEmbedding(
-            model=embedding_model,
-            api_key=self.openai_api_key,
+        self.embed_model = OllamaEmbedding(
+            base_url=self.config.ollama_embedding_url, 
+            model_name=self.config.ollama_embedding_model,
+            request_timeout=self.config.ollama_request_timeout
         )
-
-        self.cleaner = SOPLLMCleaner(llm=self.llm)
 
         self.splitter = SentenceSplitter(
             chunk_size=chunk_size,
@@ -172,13 +94,6 @@ class DocumentIngestChunkEmbedPipeline:
             questions=questions_per_chunk,
         )
 
-        # Clean original page Documents once.
-        self.cleaning_pipeline = IngestionPipeline(
-            transformations=[
-                self.cleaner,
-            ]
-        )
-
         # Split temporary cross-page Documents and enrich resulting nodes.
         self.node_pipeline = IngestionPipeline(
             transformations=[
@@ -187,25 +102,6 @@ class DocumentIngestChunkEmbedPipeline:
                 self.questions_extractor,
             ]
         )
-
-    def _validate_configuration(self) -> None:
-        if not self.openai_api_key:
-            raise ValueError("Missing OPENAI_API_KEY")
-
-        if not self.pg_host:
-            raise ValueError("Missing PG_HOST")
-
-        if not self.pg_database:
-            raise ValueError("Missing PG_DATABASE")
-
-        if not self.pg_user:
-            raise ValueError("Missing PG_USER")
-
-        if not self.pg_password:
-            raise ValueError("Missing PG_PASSWORD")
-
-        if self.next_page_context_chars < 0:
-            raise ValueError("next_page_context_chars cannot be negative")
 
     def load_docling_json(self) -> dict[str, Any]:
         if not self.json_path.exists():
@@ -278,21 +174,6 @@ class DocumentIngestChunkEmbedPipeline:
 
         return page_documents
 
-    def clean_page_documents(
-        self,
-        page_documents: list[Document],
-    ) -> list[Document]:
-        logger.info(
-            "Cleaning %s page Documents",
-            len(page_documents),
-        )
-
-        cleaned_documents = self.cleaning_pipeline.run(
-            documents=page_documents,
-            show_progress=True,
-        )
-
-        return list(cleaned_documents)
 
     def build_cross_page_chunking_documents(
         self,
@@ -345,17 +226,19 @@ class DocumentIngestChunkEmbedPipeline:
 
         return chunking_documents
 
-    def split_and_enrich_nodes(
+    async def split_and_enrich_nodes(
         self,
         chunking_documents: list[Document],
     ) -> list[BaseNode]:
-
+        # Async on purpose: the Ollama client must stay on one event loop. The sync
+        # IngestionPipeline.run() spawns a throwaway loop per extractor when a loop is
+        # already running (Jupyter) and fails with "Event loop is closed".
         logger.info(
             "Splitting and enriching %s chunking Documents",
             len(chunking_documents),
         )
 
-        nodes = self.node_pipeline.run(
+        nodes = await self.node_pipeline.arun(
             documents=chunking_documents,
             show_progress=True,
         )
@@ -440,36 +323,6 @@ class DocumentIngestChunkEmbedPipeline:
             self.node_output_path,
         )
 
-    def create_pg_vector_store(
-        self,
-    ) -> PGVectorStore:
-        base_url = URL.create(
-            drivername="postgresql",
-            username=self.pg_user,
-            password=self.pg_password,
-            host=self.pg_host,
-            port=self.pg_port,
-            database=self.pg_database,
-        )
-        connection_string = base_url.set(
-            drivername="postgresql+psycopg2",
-            query={"sslmode": self.pg_ssl_mode},
-        ).render_as_string(hide_password=False)
-        async_connection_string = base_url.set(
-            drivername="postgresql+asyncpg",
-            query=({} if self.pg_ssl_mode == "disable" else {"ssl": self.pg_ssl_mode}),
-        ).render_as_string(hide_password=False)
-
-        return PGVectorStore(
-            connection_string=connection_string,
-            async_connection_string=async_connection_string,
-            table_name=self.pg_table_name,
-            schema_name=self.pg_schema_name,
-            embed_dim=self.pg_embed_dim,
-            hybrid_search=True,
-            text_search_config="english",
-        )
-
     def save_nodes_to_pg(
         self,
         nodes: list[BaseNode],
@@ -477,11 +330,11 @@ class DocumentIngestChunkEmbedPipeline:
         logger.info(
             "Embedding and saving %s nodes to Postgres table '%s.%s'",
             len(nodes),
-            self.pg_schema_name,
-            self.pg_table_name,
+            self.config.pg_schema_name,
+            self.config.pg_table_name,
         )
 
-        vector_store = self.create_pg_vector_store()
+        vector_store = self.config.vector_store
 
         storage_context = StorageContext.from_defaults(
             vector_store=vector_store,
@@ -496,17 +349,21 @@ class DocumentIngestChunkEmbedPipeline:
 
         logger.info("Postgres pgvector indexing completed")
 
-    def run(self) -> None:
+    async def arun(self) -> None:
+        """Run the pipeline. In a notebook: `await pipeline.arun()`."""
         page_documents = self.build_page_documents()
-        cleaned_page_documents = self.clean_page_documents(page_documents)
-        self.save_documents_preview(cleaned_page_documents)
+        self.save_documents_preview(page_documents)
 
         chunking_documents = self.build_cross_page_chunking_documents(
-            cleaned_page_documents
+            page_documents
         )
-        nodes = self.split_and_enrich_nodes(chunking_documents)
+        nodes = await self.split_and_enrich_nodes(chunking_documents)
         self.save_nodes_preview(nodes)
 
         self.save_nodes_to_pg(nodes)
 
         logger.info("Pipeline finished. Data saved to Postgres pgvector.")
+
+    def run(self) -> None:
+        """Sync entry point for scripts/CLI. Not callable from a running event loop."""
+        asyncio.run(self.arun())

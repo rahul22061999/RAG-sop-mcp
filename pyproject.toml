@@ -3,7 +3,7 @@ name = "wms-sop-mcp"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastmcp==3.4.2",
     "click>=8.0",
@@ -11,7 +11,7 @@ dependencies = [
     "llama-index>=0.14.23",
     "llama-index-embeddings-openai",
     "llama-index-llms-openai",
-    "docling[vlm]>=2.111.0",
+    "docling[vlm]<2.125",
     "pydantic-settings",
     "ipykernel>=7.3.0",
     "pypdf>=6.14.2",
@@ -41,6 +41,9 @@ dependencies = [
     "openai>=2.44.0",
     "llama-index-core>=0.14.23",
     "matplotlib>=3.11.1",
+    "huggingface-hub>=1.22.0",
+    "onnxruntime>=1.30.0",
+    "llama-index-embeddings-ollama>=0.10.0",
 ]
 
 [tool.uv.sources]

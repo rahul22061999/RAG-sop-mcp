@@ -1,25 +1,55 @@
-# Python-generated files
+# Commit only the code: server/ (backend) and frontend/ (UI), plus the files
+# needed to build and run them (pyproject, uv.lock, Docker, README, tests, CI).
+
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Virtual environments
-.venv
+# Secrets / local config (keep .env.example)
 .env
-logs
+.env.*
+!.env.example
+logs/
+*.log
 
-# Source data & generated artifacts - regenerate via the ingestion pipeline
-# (see README). Not committed: multi-MB binaries, and redistribution rights
-# for the source SOP PDF haven't been confirmed.
-server/data/*.pdf
+# Source data & generated artifacts - regenerate via `python -m pipeline.main`
+# (multi-MB binaries; redistribution rights for the source SOP PDF unconfirmed)
+server/data/
+server/output/
 server/ingested_docs/
-
-# Generated eval reports - reproducible via `python -m evaluation.report`
 eval_report.html
 eval_report.json
 
-# OS
+# Notebooks / scratch
+.ipynb_checkpoints/
+*.ipynb
+server/notebooks/
+requirements.txt
+
+# Frontend (frontend/sop-chatbot)
+node_modules/
+/frontend/package-lock.json
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+npm-debug.log*
+frontend/**/.agents/
+frontend/**/.claude/
+frontend/**/skills-lock.json
+
+# Editor / OS
 .DS_Store
+.idea/
+.vscode/

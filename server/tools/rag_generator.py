@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 
 from config.settings import settings
 from llama_index.core import PromptTemplate
@@ -12,16 +13,7 @@ class SOPResponse(BaseModel):
     confidence: float = Field(description="Confidence score from 0 to 1")
 
 
-async def generate_sop_context(
-    question: str, data: list[dict] | list[str]
-) -> SOPResponse:
-    llm = Ollama(
-        model=settings.ollama_model,
-        base_url=settings.ollama_base_url,
-        request_timeout=settings.ollama_request_timeout,
-    )
-
-    prompt = PromptTemplate("""\
+_PROMPT_BODY = """\
 You are answering questions about warehouse Standard Operating Procedures
 (SOPs) for pharmaceutical and medical supply management. Your answer will
 be read by a warehouse worker who needs to follow it exactly, so
@@ -71,7 +63,9 @@ Confidence:
 - 0.0-0.4: the context does not meaningfully answer the question, or the
   answer is mostly a statement that the information isn't available.
 
-Return ONLY valid JSON in exactly this format:
+"""
+
+_JSON_TAIL = """Return ONLY valid JSON in exactly this format:
 
 {{
     "answer": "your answer here",
@@ -83,14 +77,42 @@ Rules:
 - Do not return markdown.
 - Do not use ```json fences.
 - Do not return any text before or after the JSON.
-- confidence must be a number between 0 and 1.""")
+- confidence must be a number between 0 and 1."""
 
-    llm_generated_data = await llm.acomplete(
-        prompt.format(question=question, data=json.dumps(data))
+_STREAM_TAIL = """Answer in plain prose (no JSON, no markdown fences). Follow the rules above.
+End with a final line in exactly this form:
+Sources: pages <page numbers you relied on>"""
+
+
+def _llm() -> Ollama:
+    return Ollama(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+        request_timeout=settings.ollama_request_timeout,
     )
 
-    raw = llm_generated_data.text.strip()
 
-    parsed = json.loads(raw)
+async def generate_sop_context(
+    question: str, data: list[dict] | list[str]
+) -> SOPResponse:
+    """Non-streaming: returns the full structured answer (used by the MCP tool)."""
+    prompt = PromptTemplate(_PROMPT_BODY + _JSON_TAIL)
+    raw = (
+        await _llm().acomplete(
+            prompt.format(question=question, data=json.dumps(data))
+        )
+    ).text.strip()
+    return SOPResponse.model_validate(json.loads(raw))
 
-    return SOPResponse.model_validate(parsed)
+
+async def stream_sop_context(
+    question: str, data: list[dict] | list[str]
+) -> AsyncIterator[str]:
+    """Streaming: yields plain-prose answer tokens (used by the websocket)."""
+    prompt = PromptTemplate(_PROMPT_BODY + _STREAM_TAIL)
+    stream = await _llm().astream_complete(
+        prompt.format(question=question, data=json.dumps(data))
+    )
+    async for chunk in stream:
+        if chunk.delta:
+            yield chunk.delta

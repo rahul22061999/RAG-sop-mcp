@@ -1,14 +1,17 @@
 from functools import cached_property
 from pathlib import Path
+from pydoc import resolve
+
 
 from llama_index.core import VectorStoreIndex
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.vector_stores.postgres import PGVectorStore
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
-ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
+PROJECT_PATH = Path(__file__).resolve().parent.parent
+ENV_PATH = PROJECT_PATH.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -19,6 +22,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    project_path: Path = PROJECT_PATH
     service_name: str = "wms-sop-server"
     service_description: str = "Production-grade RAG WMS MCP service"
 
@@ -35,7 +39,7 @@ class Settings(BaseSettings):
     pg_password: SecretStr
     pg_table_name: str = "sop_chunks"
     pg_schema_name: str = "public"
-    pg_embed_dim: int = 1536
+    pg_embed_dim: int = 768
     pg_ssl_mode: str = "disable"
 
     openai_api_key: SecretStr
@@ -48,14 +52,17 @@ class Settings(BaseSettings):
     # Mac/Windows only - it does not resolve on Linux hosts or most managed
     # container platforms. Override via env for any other deployment target.
     ollama_model: str = "gemma4:31b-cloud"
-    ollama_base_url: str = "http://host.docker.internal:11434"
-    ollama_request_timeout: float = 60.0
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_embedding_url: str = "http://localhost:11434"
+    ollama_embedding_model: str = "embeddinggemma:300m"
+    ollama_request_timeout: float = 300.0
 
     @cached_property
-    def embed_model(self) -> OpenAIEmbedding:
-        return OpenAIEmbedding(
-            model=self.openai_embedding_model,
-            api_key=self.openai_api_key.get_secret_value(),
+    def embed_model(self) -> OllamaEmbedding:
+        return OllamaEmbedding(
+            base_url=self.ollama_embedding_url, 
+            model_name=self.ollama_embedding_model,
+            request_timeout=self.ollama_request_timeout
         )
 
     @cached_property
