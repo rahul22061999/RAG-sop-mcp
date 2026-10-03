@@ -1,7 +1,3 @@
-# Runs both eval suites (retrieval + generation) and renders a single
-# self-contained HTML report: 4 headline stat tiles, then a per-question
-# breakdown card for each suite. Open eval_report.html in a browser and
-# screenshot it for the blog. Raw numbers are also saved to eval_report.json.
 import asyncio
 import html
 import json
@@ -13,8 +9,8 @@ from evaluation.generation_evaluation import RAGGenerationEvaluation
 from evaluation.retrieval_eval import GROUND_TRUTH as RETRIEVAL_GROUND_TRUTH
 from evaluation.retrieval_eval import RetrivalMetrics
 
-SERIES_A = "#2a78d6"  # blue - first metric of each pair
-SERIES_B = "#eb6834"  # orange - second metric of each pair
+SERIES_A = "#2a78d6"
+SERIES_B = "#eb6834"
 
 
 async def run_retrieval() -> dict:

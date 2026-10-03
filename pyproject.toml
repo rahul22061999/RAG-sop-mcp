@@ -44,6 +44,10 @@ dependencies = [
     "huggingface-hub>=1.22.0",
     "onnxruntime>=1.30.0",
     "llama-index-embeddings-ollama>=0.10.0",
+    "opentelemetry-sdk>=1.45.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
+    "opentelemetry-exporter-prometheus>=0.66b0",
+    "redis>=8.1.0",
 ]
 
 [tool.uv.sources]

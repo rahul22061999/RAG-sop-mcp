@@ -28,18 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentChunkEmbedPipeline:
-    """
-    Pipeline:
-
-    Docling JSON
-    -> one Document per page
-    -> clean each page once
-    -> build current-page + next-page chunking windows
-    -> split windows into overlapping nodes
-    -> add title and question metadata
-    -> embed nodes
-    -> save nodes into Postgres (pgvector)
-    """
 
     def __init__(
         self,
@@ -94,7 +82,6 @@ class DocumentChunkEmbedPipeline:
             questions=questions_per_chunk,
         )
 
-        # Split temporary cross-page Documents and enrich resulting nodes.
         self.node_pipeline = IngestionPipeline(
             transformations=[
                 self.splitter,
@@ -112,9 +99,6 @@ class DocumentChunkEmbedPipeline:
         return json.loads(self.json_path.read_text(encoding="utf-8"))
 
     def build_page_documents(self) -> list[Document]:
-        """
-        Create exactly one LlamaIndex Document per Docling page.
-        """
 
         data = self.load_docling_json()
         docling_document = DoclingDocument.model_validate(data["document"])
@@ -230,9 +214,6 @@ class DocumentChunkEmbedPipeline:
         self,
         chunking_documents: list[Document],
     ) -> list[BaseNode]:
-        # Async on purpose: the Ollama client must stay on one event loop. The sync
-        # IngestionPipeline.run() spawns a throwaway loop per extractor when a loop is
-        # already running (Jupyter) and fails with "Event loop is closed".
         logger.info(
             "Splitting and enriching %s chunking Documents",
             len(chunking_documents),
@@ -350,7 +331,6 @@ class DocumentChunkEmbedPipeline:
         logger.info("Postgres pgvector indexing completed")
 
     async def arun(self) -> None:
-        """Run the pipeline. In a notebook: `await pipeline.arun()`."""
         page_documents = self.build_page_documents()
         self.save_documents_preview(page_documents)
 
@@ -365,5 +345,4 @@ class DocumentChunkEmbedPipeline:
         logger.info("Pipeline finished. Data saved to Postgres pgvector.")
 
     def run(self) -> None:
-        """Sync entry point for scripts/CLI. Not callable from a running event loop."""
         asyncio.run(self.arun())

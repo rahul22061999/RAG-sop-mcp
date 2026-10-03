@@ -12,14 +12,18 @@ logger = logging.getLogger(__name__)
 
 @click.group()
 def cli():
-    """WMS MCP CLI."""
+    pass
 
 
 @cli.command()
 def start():
-    """Start the WMS SOP MCP server."""
+    from prometheus_client import start_http_server
+    from telemetry import setup_telemetry
+
+    setup_telemetry("wms-sop-mcp")
     from app import mcp, settings
 
+    start_http_server(settings.metrics_port)
     setup_logging(log_level=settings.log_level, log_file=settings.log_file)
     logger.info(
         "Starting %s on port %d (log_file=%s)",

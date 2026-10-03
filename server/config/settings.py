@@ -27,11 +27,10 @@ class Settings(BaseSettings):
     service_description: str = "Production-grade RAG WMS MCP service"
 
     port: int = 8001
+    metrics_port: int = 9464
     log_level: str = "INFO"
     log_file: str = "logs/wms-sop-mcp.log"
 
-    # Postgres (pgvector) - Google Cloud SQL / AlloyDB or any Postgres
-    # instance with the pgvector extension enabled.
     pg_host: str
     pg_port: int = 5432
     pg_database: str
@@ -47,15 +46,19 @@ class Settings(BaseSettings):
 
     unkey_root_api_key: SecretStr
 
-    # Ollama endpoint used for answer generation (server/tools/rag_generator.py).
-    # "http://host.docker.internal:11434" is correct for Docker Desktop on
-    # Mac/Windows only - it does not resolve on Linux hosts or most managed
-    # container platforms. Override via env for any other deployment target.
     ollama_model: str = "gemma4:31b-cloud"
     ollama_base_url: str = "http://localhost:11434"
     ollama_embedding_url: str = "http://localhost:11434"
     ollama_embedding_model: str = "embeddinggemma:300m"
     ollama_request_timeout: float = 300.0
+
+    cache_enabled: bool = True
+    redis_url: str = "redis://localhost:6379/0"
+    cache_ttl_seconds: int = 300
+
+    retry_attempts: int = 3
+    retry_base_delay: float = 0.5
+    retry_max_delay: float = 8.0
 
     @cached_property
     def embed_model(self) -> OllamaEmbedding:

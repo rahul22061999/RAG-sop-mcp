@@ -15,9 +15,7 @@ const convertMessage = (message: ThreadMessageLike) => {
 
 type ChatControls = {
   isRunning: boolean;
-  /** Close the socket and stop the answer that is currently streaming. */
   disconnect: () => void;
-  /** Disconnect and delete the whole conversation. */
   clearChat: () => void;
 };
 
@@ -55,7 +53,6 @@ export function MyRuntimeProvider({
     const query = message.content[0].text;
     const assistantId = crypto.randomUUID();
 
-    // user message + an empty assistant message that we fill as tokens arrive
     setMessages((cur) => [
       ...cur,
       { role: "user", content: [{ type: "text", text: query }] },

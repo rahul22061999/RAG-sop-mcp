@@ -1,8 +1,3 @@
-"""One entry point: PDF -> Docling VLM parse -> chunk -> embed -> pgvector.
-
-Script:    cd server && ../.venv/bin/python -m pipeline.main "data/<file>.pdf"
-Notebook:  await run_pipeline("data/<file>.pdf")
-"""
 import asyncio
 import sys
 from pathlib import Path
@@ -17,7 +12,7 @@ async def run_pipeline(pdf_path: str | Path, output_dir: str | Path = OUTPUT_DIR
     pdf, out = Path(pdf_path), Path(output_dir)
     json_path = out / f"{pdf.stem}.json"
 
-    # ingest is blocking run it off the event loop while testing
+
     await asyncio.to_thread(
         DocumentIngestor().ingest_one, pdf, json_path, out / f"{pdf.stem}.md"
     )

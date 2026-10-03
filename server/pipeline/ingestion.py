@@ -1,23 +1,3 @@
-"""
-Step 1: Parse a warehouse SOP PDF with Docling.
-
-The PDF may contain selectable text, scanned text, tables, and pictures.
-This module configures Docling to:
-- read the PDF using a threaded processing pipeline;
-- use OCR to extract text from scanned or image-based content;
-- reconstruct table rows and cells;
-- generate descriptions of detected pictures;
-- make picture images available for export.
-
-For each input PDF, ingest_one() converts it into a DoclingDocument,
-writes a readable Markdown file, and writes a JSON file containing
-source information, processing settings, Markdown, and optionally the
-structured Docling document.
-
-This step prepares the document for RAG. Chunking, embedding, storing
-in a vector database, and answering questions happen in later steps.
-"""
-
 from __future__ import annotations
 
 import json
@@ -46,21 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentIngestor:
-    """
-    This class handles the document parsing stage of your RAG pipeline. Give it a PDF and two output paths;
-    it converts the PDF with Docling, saves the results, and returns them as a Python dictionary.
-    """
 
     def __init__(self, config: Settings | None = None) -> None:
         self.config = config if config is not None else Settings()
         self.converter = self._build_converter()
 
     def _build_converter(self) -> DocumentConverter:
-        """
-        Build the pipeline using VLM
-        """
 
-        # initialize ollama model
         model_name = self.config.ollama_model
 
         engine_options = ApiVlmEngineOptions(

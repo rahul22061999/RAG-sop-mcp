@@ -1,21 +1,3 @@
-"""
-Tests for sop_query_tool's flattening of retrieved nodes into plain dicts,
-and its error-handling path.
-
-Regression coverage: retriever.aretrieve() returns NodeWithScore objects,
-which are not JSON-serializable - passing them straight into
-generate_sop_context (which does json.dumps internally) raised
-"Object of type NodeWithScore is not JSON serializable". The fix flattens
-each node to a plain dict before it reaches that call.
-
-settings.index is a functools.cached_property backed by a real Postgres
-connection - accessing it even once via mock.patch/patch.object (which
-read the current value first, to restore on teardown) would try to build
-a real PGVectorStore. Tests below write directly into settings.__dict__
-instead, which is where cached_property stores its computed value, so the
-real getter is never invoked.
-"""
-
 import json
 
 import pytest
@@ -33,7 +15,6 @@ class _FakeNode:
 
 
 class _FakeNodeWithScore:
-    """Mirrors llama_index's NodeWithScore shape: .node and .score."""
 
     def __init__(self, content: str, metadata: dict, score: float):
         self.node = _FakeNode(content, metadata)
@@ -66,9 +47,6 @@ class _FakeSOPResponse:
 
 @pytest.fixture
 def fake_index(mocker):
-    """Install a fake settings.index without ever touching the real
-    cached_property (which would otherwise open a real Postgres connection).
-    """
 
     def _install(retriever):
         mocker.patch.dict(settings.__dict__, {"index": _FakeIndex(retriever)})
@@ -103,8 +81,6 @@ async def test_flattens_nodes_into_json_serializable_dicts(mocker, fake_index):
 
     assert result == {"answer": "ok", "citations": ["35"], "confidence": 1.0}
 
-    # The exact regression: data handed to generate_sop_context must be
-    # plain, json.dumps-safe dicts, not NodeWithScore objects.
     json.dumps(captured["data"])
 
     assert captured["data"] == [

@@ -17,8 +17,6 @@ async def _send_answer(websocket: WebSocket, query: str, top_records: int) -> No
 
 
 async def _wait_for_disconnect(websocket: WebSocket) -> None:
-    """Return as soon as the client closes the socket.
-    """
     while True:
         message = await websocket.receive()
         if message["type"] == "websocket.disconnect":
@@ -27,12 +25,6 @@ async def _wait_for_disconnect(websocket: WebSocket) -> None:
 
 @router.websocket("/ws/stream")
 async def chat(websocket: WebSocket):
-    """Stream an SOP answer for each {"query": "..."} message.
-
-    Server messages: {"type": "token", "content": str} per chunk, then
-    {"type": "done"}; or {"type": "error", "content": str}.
-    If the client disconnects mid-answer, retrieval/generation is cancelled.
-    """
     await websocket.accept()
 
     try:

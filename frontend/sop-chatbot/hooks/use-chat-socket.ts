@@ -22,11 +22,10 @@ export function useChatSocket() {
 
   const cancel = useCallback(() => {
     const ws = wsRef.current;
-    wsRef.current = null; // detach first so onclose doesn't report an error
+    wsRef.current = null;
     ws?.close();
   }, []);
 
-  // Close any open socket when the component unmounts / the page is left.
   useEffect(() => cancel, [cancel]);
 
   const ask = useCallback(
@@ -57,7 +56,6 @@ export function useChatSocket() {
         finish(() => handlers.onError("Could not reach the SOP server."));
 
       ws.onclose = () => {
-        // Ignore closes we caused (cancel / finish); report unexpected ones.
         if (wsRef.current === ws) {
           finish(() => handlers.onError("Connection closed unexpectedly."));
         }

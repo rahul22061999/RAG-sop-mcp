@@ -1,11 +1,3 @@
-"""
-Tests for UnkeyAuthMiddleware's request-rejection paths. This is the only
-thing standing between the SOP knowledge base and the open internet on a
-publicly reachable MCP endpoint, so its failure modes need real coverage:
-missing header, wrong scheme, revoked key, and the provider-error path all
-have to fail closed (raise), never silently let a request through.
-"""
-
 from unittest.mock import AsyncMock
 
 import httpx

@@ -95,7 +95,6 @@ def _llm() -> Ollama:
 async def generate_sop_context(
     question: str, data: list[dict] | list[str]
 ) -> SOPResponse:
-    """Non-streaming: returns the full structured answer (used by the MCP tool)."""
     prompt = PromptTemplate(_PROMPT_BODY + _JSON_TAIL)
     raw = (
         await _llm().acomplete(
@@ -108,7 +107,6 @@ async def generate_sop_context(
 async def stream_sop_context(
     question: str, data: list[dict] | list[str]
 ) -> AsyncIterator[str]:
-    """Streaming: yields plain-prose answer tokens (used by the websocket)."""
     prompt = PromptTemplate(_PROMPT_BODY + _STREAM_TAIL)
     stream = await _llm().astream_complete(
         prompt.format(question=question, data=json.dumps(data))
